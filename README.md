@@ -1,6 +1,7 @@
 # file-processor
-### Moved from file-processor-old
-Files to use: fileProcessor_client.py, fileProcessor_lib.py
+### Files to use: fileProcessor_client.py, fileProcessor_lib.py
+
+Moved from file-processor-old
 
 How to use: 
 
