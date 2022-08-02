@@ -6,7 +6,7 @@ How to use:
 <ol>
 <li>add both files to a chosen directory.
   <ul>
-    <li>for Studyfind, add the webscraperFunc.py to the directory as well (slightly modified previous webscraper to be a callable function)</li>
+    <li>for Studyfind, add the webscraperFunc.py (NOT written by Alexander Zhu) to the directory as well (slightly modified previous webscraper to be a callable function)</li>
     <li>if you want to use any other function for processing, add that file to the directory</li>
   </ul>
 </li>
