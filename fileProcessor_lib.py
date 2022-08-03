@@ -3,13 +3,12 @@ import os
 import pandas as pd
 
 
-
 ############################ ProcessFilesInDir #################################
 
-def processFilesInDir(dirName, processingFunc, fileType='.csv',
-  createDir=True, moveNewFiles=False, splitFiles=False, splitSize=50,
-  deleteProcessed=False, deleteNewFiles=False, removeDuplicatesFn=None,
-  processedFolderName='processed', newFilesFolderName='new_files', togglePrint=True):
+def processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True, 
+  moveNewFiles=False, splitFiles=False, splitSize=50, deleteProcessed=False, 
+  deleteNewFiles=False, removeDuplicatesFn=None, processedFolderName='processed', 
+  newFilesFolderName='new_files', togglePrint=True):
 
   # Get the path for the directory with dirName
   dirPath = getDirectoryPath(dirName, createDir, togglePrint=togglePrint)
@@ -219,7 +218,7 @@ def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files
     # gets a data frame of size 'size' and converts it into a csv file.
     df = data[splitSize*i:splitSize*(i+1)]
     df.to_csv(os.path.join(childFolderPath, f"{i}_{fileName}"), index=False)
-  togglePrint and print(f"{splits} split files added to the '{childFolderName}' folder.")
+  togglePrint and print(f"{splits} split file(s) added to the '{childFolderName}' folder.")
 
 
 
