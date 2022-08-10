@@ -12,7 +12,8 @@ processFilesInDir('TEST_data_sheets', runWebscraper,
     moveNewFiles=True, newFilesFolderName="to_split",
     splitFiles=True, splitSize=5,
     removeDuplicatesFn=studyfind_removeDupEmails_inPlace,
-    uploadToGoogleDrive=True) # deleteProcessed=True, deleteNewFiles=True
+    uploadToGoogleDrive=True) 
+    # deleteProcessed=True, deleteNewFiles=True
 
 # processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True, 
 #   moveNewFiles=False, splitFiles=False, splitSize=50, deleteProcessed=False, 

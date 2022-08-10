@@ -3,7 +3,6 @@ from __future__ import print_function
 import os
 import pandas as pd
 
-# import google.auth
 import os
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
