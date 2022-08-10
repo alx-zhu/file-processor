@@ -11,12 +11,13 @@ from fileProcessor_lib import processFilesInDir, studyfind_removeDupEmails_inPla
 processFilesInDir('TEST_data_sheets', runWebscraper, 
     moveNewFiles=True, newFilesFolderName="to_split",
     splitFiles=True, splitSize=5,
-    removeDuplicatesFn=studyfind_removeDupEmails_inPlace) # deleteProcessed=True, deleteNewFiles=True
+    removeDuplicatesFn=studyfind_removeDupEmails_inPlace,
+    uploadToGoogleDrive=True) # deleteProcessed=True, deleteNewFiles=True
 
-# processFilesInDir(dirName, processingFunc, fileType='.csv',
-  # createDir=True, moveNewFiles=False, splitFiles=False, splitSize=50,
-  # deleteProcessed=False, deleteNewFiles=False, removeDuplicatesFn=None,
-  # processedFolderName='processed', newFilesFolderName='new_files', togglePrint=True)
+# processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True, 
+#   moveNewFiles=False, splitFiles=False, splitSize=50, deleteProcessed=False, 
+#   deleteNewFiles=False, removeDuplicatesFn=None, processedFolderName='processed', 
+#   newFilesFolderName='new_files', togglePrint=True, uploadToGoogleDrive=False)
 
 ### Optional parameters:
   # suffix: '.csv' by default. change to match the type of file being processed.
@@ -36,5 +37,4 @@ processFilesInDir('TEST_data_sheets', runWebscraper,
     # NOTE: essential warnings will still be printed regardless of the setting.
     # NOTE: recommend to keep print statements ON unless there is explicit need to turn them OFF.
       # information in print statements explain any issues/actions taken
-
-
+  # uploadToGoogleDrive: default False. sets whether final files will be uploaded to Google Drive.
