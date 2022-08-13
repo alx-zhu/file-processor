@@ -57,7 +57,8 @@ def processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True,
 
         togglePrint and print(f'Processing {fileName}...')
         processFile(fileName, filePath, processingFunc)
-        storeFile(fileName, filePath, dirPath, processedFolderName, createDir=createDir, deleteProcessed=deleteProcessed, togglePrint=togglePrint)
+        storeFile(fileName, filePath, dirPath, processedFolderName, createDir=createDir, deleteProcessed=deleteProcessed,
+            togglePrint=togglePrint)
         # If there are NEW files that are written and moveNewFiles=True, move them.
         if (moveNewFiles):
           filePath = moveNewFile(fileName, dirPath, newFilesFolderName, createDir=createDir, togglePrint=togglePrint)
@@ -78,7 +79,7 @@ def processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True,
           fileId = storeFileInGoogleDrive(fileName, filePath, togglePrint=togglePrint)
           # share with emails if there are emails provided
           if (emails):
-            shareGoogleDriveFile(fileId, emails, togglePrint=togglePrint)
+            shareGoogleDriveFile(fileId, *emails, togglePrint=togglePrint)
 
         # If deleteNewFiles is enabled, delete the new file via 'filePath'
         if (deleteNewFiles and os.path.isfile(filePath)):
@@ -233,12 +234,11 @@ def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files
   if (uploadToGoogleDrive):
     googleFolderId = createGoogleDriveFolder(childFolderName, togglePrint=togglePrint)
     if (emails):
-      shareGoogleDriveFile(googleFolderId, emails, togglePrint=togglePrint)
+      shareGoogleDriveFile(googleFolderId, *emails, togglePrint=togglePrint)
 
   # splits the files
   data = pd.read_csv(filePath)
-  data.rename(columns={' Contact Name':'Name'})
-  data.rename(columns={' Contact Email':'Email'})
+  data = data.rename(columns={' Contact Name':'Name', ' Contact Email':'Email'})
   total = len(data)
   splits = (total//splitSize + 1) if (total % splitSize != 0) else (total//splitSize)
   for i in range(splits):
@@ -253,6 +253,52 @@ def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files
       googleFileId = storeFileInGoogleFolder(splitFileName, splitFilePath, googleFolderId, togglePrint=togglePrint)
 
   togglePrint and print(f"{splits} split file(s) added to the '{childFolderName}' folder.")
+
+
+############################# splitCSVIntoChunks ###############################
+
+# For splitting one file into specific sized chunks
+# will split file into all defined chunkSizes if possible
+# any remaining rows in the file will be split according to defaultSize
+# if defaultSize=None, any remaining rows will be added into a single file.
+def splitCSVIntoChunks(fileName, filePath, *chunkSizes, defaultSize=None, togglePrint=True):
+  data = pd.read_csv(filePath)
+  data = data.rename(columns={' Contact Name':'Name', ' Contact Email':'Email'})
+  dataIndex = fileIndex = 0
+  for chunk in chunkSizes:
+    df = data[dataIndex:min(dataIndex+chunk, len(data))]
+    splitFileName = f"{fileIndex}_{fileName}"
+    # splitFilePath = os.path.join(childFolderPath, splitFileName) 
+    df.to_csv(splitFileName, index=False)
+
+    # increment indices
+    dataIndex += chunk
+    if (dataIndex >= len(data)):
+      break
+    fileIndex += 1
+
+    togglePrint and print(f"Created split file of size {chunk} named '{splitFileName}'")
+  
+  # if there is still data left after the chunks are made
+  if (dataIndex < len(data)):
+    # if there is a default size, split the remaining data into default size files
+    if (defaultSize):
+      while (dataIndex < len(data)):
+        df = data[dataIndex:min(dataIndex+defaultSize, len(data))]
+        splitFileName = f"{fileIndex}_{fileName}"
+        df.to_csv(splitFileName, index=False)
+
+        # increment indices
+        dataIndex += defaultSize
+        fileIndex += 1
+
+        togglePrint and print(f"No chunk sizes remaining. Created split file of default size {defaultSize} named: '{splitFileName}'")
+    # if there is no default size, put all the remaining data into one file
+    else:
+      df = data[dataIndex:len(data)]
+      splitFileName=f"{fileIndex}_{fileName}"
+      df.to_csv(splitFileName, index=False)
+      togglePrint and print(f"No chunk sizes remaining. No defaultSize provided, so all remaining data is stored in: '{splitFileName}'")
 
 
 
@@ -287,7 +333,7 @@ def createGoogleDriveFolder(folderName, togglePrint=True):
     # pylint: disable=maybe-no-member
     file = service.files().create(body=file_metadata, fields='id'
                                     ).execute()
-    togglePrint and print(F'*GOOGLE* Google Drive folder has been created with ID: "{file.get("id")}".')
+    togglePrint and print(F'----> Google Drive folder has been created with ID: "{file.get("id")}".')
 
   except HttpError as error:
     print(F'***An error occurred: {error}***')
@@ -315,7 +361,7 @@ def storeFileInGoogleDrive(fileName, filePath, mimeType='text/csv', togglePrint=
     # pylint: disable=maybe-no-member
     file = service.files().create(body=file_metadata, media_body=media,
                                   fields='id').execute()
-    togglePrint and print(F'*GOOGLE* File ID: {file.get("id")} was uploaded to Google Drive.')
+    togglePrint and print(F'----> File ID: {file.get("id")} was uploaded to Google Drive.')
 
   except HttpError as error:
     print(F'***An error occurred: {error}***')
@@ -347,7 +393,7 @@ def storeFileInGoogleFolder(fileName, filePath, googleFolderId, mimeType='text/c
     # pylint: disable=maybe-no-member
     file = service.files().create(body=file_metadata, media_body=media,
                                   fields='id').execute()
-    togglePrint and print(F'*GOOGLE* File with ID: "{file.get("id")}" has been added to the Google Drive folder with '
+    togglePrint and print(F'----> File with ID: "{file.get("id")}" has been added to the Google Drive folder with '
           F'ID "{googleFolderId}".')
 
   except HttpError as error:
@@ -360,7 +406,7 @@ def storeFileInGoogleFolder(fileName, filePath, googleFolderId, mimeType='text/c
 
 ########################### storeFileInGoogleDrive #############################
 
-def shareGoogleDriveFile(fileId, emails, togglePrint=True):
+def shareGoogleDriveFile(fileId, *emails, togglePrint=True):
   creds = None
   SCOPES = ['https://www.googleapis.com/auth/drive']
   if os.path.exists('token.json'):
@@ -374,7 +420,7 @@ def shareGoogleDriveFile(fileId, emails, togglePrint=True):
     for email in emails:
       service.permissions().create(body={"role": "writer", "type": "user", 
             "emailAddress": email}, fileId=fileId).execute()
-      togglePrint and print(F'*GOOGLE* File with ID: "{fileId}" was shared with {email}')
+      togglePrint and print(F'----> File with ID: "{fileId}" was shared with {email}')
 
   except HttpError as error:
     print(F'***An error occurred: {error}***')
