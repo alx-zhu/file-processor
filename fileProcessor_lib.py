@@ -15,7 +15,8 @@ from google.oauth2.credentials import Credentials
 def processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True, 
   moveNewFiles=False, splitFiles=False, splitSize=50, deleteProcessed=False, 
   deleteNewFiles=False, removeDuplicatesFn=None, processedFolderName='processed', 
-  newFilesFolderName='new_files', togglePrint=True, uploadToGoogleDrive=False):
+  newFilesFolderName='new_files', togglePrint=True, uploadToGoogleDrive=False,
+  emails=None):
 
   # Get the path for the directory with dirName
   dirPath = getDirectoryPath(dirName, createDir, togglePrint=togglePrint)
@@ -68,12 +69,16 @@ def processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True,
         # other options will be added as needed.
         if (splitFiles):
           if (fileType == '.csv'):
-            splitCSVFile(fileName, filePath, dirPath, splitSize, togglePrint=togglePrint, uploadToGoogleDrive=uploadToGoogleDrive)
+            splitCSVFile(fileName, filePath, dirPath, splitSize, togglePrint=togglePrint, 
+                uploadToGoogleDrive=uploadToGoogleDrive, emails=emails)
           elif (fileType == '.tsv'):
             pass
         # If files are not to be split, but they should be uploaded to Google Drive
         elif (uploadToGoogleDrive):
-          storeFileInGoogleDrive(fileName, filePath, togglePrint=togglePrint)
+          fileId = storeFileInGoogleDrive(fileName, filePath, togglePrint=togglePrint)
+          # share with emails if there are emails provided
+          if (emails):
+            shareGoogleDriveFile(fileId, emails, togglePrint=togglePrint)
 
         # If deleteNewFiles is enabled, delete the new file via 'filePath'
         if (deleteNewFiles and os.path.isfile(filePath)):
@@ -206,7 +211,9 @@ def moveNewFile(fileName, dirPath, folderName, createDir=True, togglePrint=True)
 
 # Splits a .csv file into files of a maximum size
 # This function has NO createDir parameter, as folders MUST be created.
-def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files", togglePrint=True, uploadToGoogleDrive=False):
+def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files", 
+    togglePrint=True, uploadToGoogleDrive=False, emails=None):
+
   parentFolderPath = os.path.join(dirPath, folderName)
 
   # create the 'to_split' directory if it does not exist
@@ -225,6 +232,8 @@ def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files
   googleFolderId = None
   if (uploadToGoogleDrive):
     googleFolderId = createGoogleDriveFolder(childFolderName, togglePrint=togglePrint)
+    if (emails):
+      shareGoogleDriveFile(googleFolderId, emails, togglePrint=togglePrint)
 
   # splits the files
   data = pd.read_csv(filePath)
@@ -346,6 +355,29 @@ def storeFileInGoogleFolder(fileName, filePath, googleFolderId, mimeType='text/c
     file = None
 
   return file.get('id')
+
+
+
+########################### storeFileInGoogleDrive #############################
+
+def shareGoogleDriveFile(fileId, emails, togglePrint=True):
+  creds = None
+  SCOPES = ['https://www.googleapis.com/auth/drive']
+  if os.path.exists('token.json'):
+    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+
+  try:
+    # create drive api client
+    service = build('drive', 'v3', credentials=creds)
+
+    # share with all emails listed
+    for email in emails:
+      service.permissions().create(body={"role": "writer", "type": "user", 
+            "emailAddress": email}, fileId=fileId).execute()
+      togglePrint and print(F'*GOOGLE* File with ID: "{fileId}" was shared with {email}')
+
+  except HttpError as error:
+    print(F'***An error occurred: {error}***')
 
 
 

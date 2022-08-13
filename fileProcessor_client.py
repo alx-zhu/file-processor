@@ -12,7 +12,8 @@ processFilesInDir('TEST_data_sheets', runWebscraper,
     moveNewFiles=True, newFilesFolderName="to_split",
     splitFiles=True, splitSize=5,
     removeDuplicatesFn=studyfind_removeDupEmails_inPlace,
-    uploadToGoogleDrive=True) 
+    uploadToGoogleDrive=True,
+    emails=['alexanderzhu07@gmail.com', 'azhu3@andrew.cmu.edu']) 
     # deleteProcessed=True, deleteNewFiles=True
 
 # processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True, 
@@ -39,3 +40,4 @@ processFilesInDir('TEST_data_sheets', runWebscraper,
     # NOTE: recommend to keep print statements ON unless there is explicit need to turn them OFF.
       # information in print statements explain any issues/actions taken
   # uploadToGoogleDrive: default False. sets whether final files will be uploaded to Google Drive.
+  # emails: default None. If files should be shared with specific people, emails=[list/tuple of emails to share with]
