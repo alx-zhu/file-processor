@@ -1,22 +1,24 @@
 # Written by Alexander Zhu
 from __future__ import print_function
 import os
+import time
 import pandas as pd
 
-import os
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
+from emailerFunc import studyfind_sendEmails
+from emailerIndexed import studyfind_sendEmails_indexed
 
 ############################ ProcessFilesInDir #################################
 
-def processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True, 
+def processFilesInDir(dirName, processingFn, fileType='.csv', createDir=True, 
   moveNewFiles=False, splitFiles=False, splitSize=50, deleteProcessed=False, 
   deleteNewFiles=False, removeDuplicatesFn=None, processedFolderName='processed', 
-  newFilesFolderName='new_files', togglePrint=True, uploadToGoogleDrive=False,
-  emails=None):
+  splitFileFolderName='split_files', newFilesFolderName='new_files', togglePrint=True, 
+  uploadToGoogleDrive=False, emails=None, skipProcessing=False):
 
   # Get the path for the directory with dirName
   dirPath = getDirectoryPath(dirName, createDir, togglePrint=togglePrint)
@@ -55,22 +57,28 @@ def processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True,
           print(f"*** A file with name '{fileName}' has already been processed. Please delete the previously processed file, or change the name of the current file to avoid errors. ***")
           return
 
-        togglePrint and print(f'Processing {fileName}...')
-        processFile(fileName, filePath, processingFunc)
-        storeFile(fileName, filePath, dirPath, processedFolderName, createDir=createDir, deleteProcessed=deleteProcessed,
+        # only process and store files if skipProcessing is False
+        if (skipProcessing):
+          togglePrint and print(f"Processing skipped. skipProcessing is set to True")
+        else:  
+          togglePrint and print(f"Processing {fileName}...")
+          processFile(fileName, filePath, processingFn)
+          storeFile(fileName, filePath, dirPath, processedFolderName, createDir=createDir, deleteProcessed=deleteProcessed,
             togglePrint=togglePrint)
-        # If there are NEW files that are written and moveNewFiles=True, move them.
-        if (moveNewFiles):
-          filePath = moveNewFile(fileName, dirPath, newFilesFolderName, createDir=createDir, togglePrint=togglePrint)
+          # If there are NEW files that are written during processing and moveNewFiles=True, move them.
+          if (moveNewFiles):
+            filePath = moveNewFile(fileName, dirPath, newFilesFolderName, createDir=createDir, togglePrint=togglePrint)
+        
         # If a removeDuplicates function is provided, use it.
         if (removeDuplicatesFn):
           removeDuplicatesFn(filePath)
           togglePrint and print(f"--> Duplicates have been removed.")
+        
         # If files need to be split, split them (only for .csv files for now)
         # other options will be added as needed.
         if (splitFiles):
           if (fileType == '.csv'):
-            splitCSVFile(fileName, filePath, dirPath, splitSize, togglePrint=togglePrint, 
+            splitCSVFile(fileName, filePath, dirPath, splitSize, folderName=splitFileFolderName, togglePrint=togglePrint, 
                 uploadToGoogleDrive=uploadToGoogleDrive, emails=emails)
           elif (fileType == '.tsv'):
             pass
@@ -119,7 +127,7 @@ def checkIfAlreadyProcessed(fileName, dirPath, processedFolderName):
 # createDir to False.
 def getDirectoryPath(dirName, createDir=True, togglePrint=True):
   dirPath = os.path.join(os.getcwd(), dirName)
-  if (dirName not in os.listdir()):
+  if (not os.path.exists(dirPath)):
     if (createDir):
       # if no folder with target name is found, create it.
       os.mkdir(dirPath)
@@ -134,8 +142,8 @@ def getDirectoryPath(dirName, createDir=True, togglePrint=True):
 ############################### processFile ####################################
 
 # Processes a file using its fileName and pathName (insert function inside)
-def processFile(fileName, filePath, processingFunc):
-  processingFunc(fileName, filePath)
+def processFile(fileName, filePath, processingFn):
+  processingFn(fileName, filePath)
 
 
 
@@ -153,7 +161,7 @@ def storeFile(fileName, filePath, dirPath, folderName, createDir=True, deletePro
   folderExists = False
   
   # create the 'processed' folder if it does not exist
-  if (folderName not in os.listdir(dirPath)):
+  if (not os.path.exists(folderPath)):
     if (createDir):
       os.mkdir(folderPath)
       togglePrint and print(f"--> Created the '{folderName}' folder because the folder was not found.")
@@ -185,7 +193,7 @@ def moveNewFile(fileName, dirPath, folderName, createDir=True, togglePrint=True)
   folderExists = False
 
   # create the 'to_split' directory if it does not exist
-  if (folderName not in os.listdir(dirPath)):
+  if (not os.path.exists(folderPath)):
     if (createDir):
       os.mkdir(folderPath)
       togglePrint and print(f"--> Created the '{folderName}' folder because the folder was not found.")
@@ -224,8 +232,8 @@ def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files
   
   # creates a folder with the same name as the file to hold the split files.
   childFolderName = str(fileName.split('.')[0])
-  if (childFolderName not in os.listdir(parentFolderPath)):   
-    childFolderPath = os.path.join(parentFolderPath, childFolderName)
+  childFolderPath = os.path.join(parentFolderPath, childFolderName)
+  if (not os.path.exists(childFolderPath)):
     os.mkdir(childFolderPath)
     togglePrint and print(f"--> Created the '{childFolderName}' folder to store the split files.")
 
@@ -262,14 +270,21 @@ def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files
 # any remaining rows in the file will be split according to defaultSize
 # if defaultSize=None, any remaining rows will be added into a single file.
 def splitCSVIntoChunks(fileName, filePath, *chunkSizes, defaultSize=None, togglePrint=True):
+  # creates a folder with the same name as the file to hold the split files.
+  childFolderName = str(fileName.split('.')[0])
+  childFolderPath = os.path.join(os.getcwd(), childFolderName)
+  if (not os.path.exists(childFolderPath)):
+    os.mkdir(childFolderPath)
+    togglePrint and print(f"--> Created the '{childFolderName}' folder to store the split files.")
+  
   data = pd.read_csv(filePath)
   data = data.rename(columns={' Contact Name':'Name', ' Contact Email':'Email'})
   dataIndex = fileIndex = 0
   for chunk in chunkSizes:
     df = data[dataIndex:min(dataIndex+chunk, len(data))]
     splitFileName = f"{fileIndex}_{fileName}"
-    # splitFilePath = os.path.join(childFolderPath, splitFileName) 
-    df.to_csv(splitFileName, index=False)
+    splitFilePath = os.path.join(childFolderPath, splitFileName) 
+    df.to_csv(splitFilePath, index=False)
 
     # increment indices
     dataIndex += chunk
@@ -286,7 +301,8 @@ def splitCSVIntoChunks(fileName, filePath, *chunkSizes, defaultSize=None, toggle
       while (dataIndex < len(data)):
         df = data[dataIndex:min(dataIndex+defaultSize, len(data))]
         splitFileName = f"{fileIndex}_{fileName}"
-        df.to_csv(splitFileName, index=False)
+        splitFilePath = os.path.join(childFolderPath, splitFileName) 
+        df.to_csv(splitFilePath, index=False)
 
         # increment indices
         dataIndex += defaultSize
@@ -297,7 +313,8 @@ def splitCSVIntoChunks(fileName, filePath, *chunkSizes, defaultSize=None, toggle
     else:
       df = data[dataIndex:len(data)]
       splitFileName=f"{fileIndex}_{fileName}"
-      df.to_csv(splitFileName, index=False)
+      splitFilePath = os.path.join(childFolderPath, splitFileName) 
+      df.to_csv(splitFilePath, index=False)
       togglePrint and print(f"No chunk sizes remaining. No defaultSize provided, so all remaining data is stored in: '{splitFileName}'")
 
 
@@ -427,7 +444,69 @@ def shareGoogleDriveFile(fileId, *emails, togglePrint=True):
 
 
 
-############################# studyfind_sendEmail ##############################
+################################ sendEmails ####################################
 
-def studyfind_sendEmail(dirPath):
-  pass
+# sends in batches of max size 50
+def sendEmails_split(emailsFolderPath, emailsFn=None, sentFolderName='sent'):
+  # to add: split any files that are larger than 50
+    # safety checks: ensuring folder path is an actual folder
+    # move files into 'sent' folder after complete.
+  # send emails
+  for fileName in os.listdir(emailsFolderPath):
+    filePath = os.path.join(emailsFolderPath, fileName)
+    emailsFn(filePath)
+    time.sleep(30)
+
+
+# to add: function that sends emails without using split files.
+# by default, will use the current directory as the path to create folders
+# indexedEmailsFn MUST take: filePath, startIndex, numberOfEmails
+def sendEmails_indexed(filePath, indexedEmailsFn, dirPath=None, fileType='.csv', 
+        sentFolderName='sent', startIndex=0, endIndex=-1, numEmails=50, delay=30, togglePrint=True):
+
+  # if dirPath is none, use the parent directory of the current file
+  if (not dirPath):
+    dirPath = os.path.dirname(filePath)
+
+  folderPath = os.path.join(dirPath, sentFolderName)
+  if (not os.path.exists(folderPath)):
+    os.mkdir(folderPath)
+  
+  if (fileType == '.csv'):
+    fileLen = len(pd.read_csv(filePath))
+    emailIndex = startIndex
+    while (emailIndex < fileLen):
+      emailsToSend = min(numEmails, fileLen-emailIndex)
+
+      # send email
+      indexedEmailsFn(filePath, startIndex=emailIndex, numEmails=emailsToSend)
+      togglePrint and print(f"--> ({min(emailsToSend, fileLen)}) total emails have been sent.")
+      
+      # delay between sends
+      time.sleep(delay)
+      # update index
+      emailIndex += numEmails
+  
+  # move file
+  fileName = os.path.basename(filePath)
+  os.rename(filePath, os.path.join(folderPath, fileName))
+  togglePrint and print(f"All '{fileName}' emails have been sent. File moved to the '{sentFolderName}' folder.")
+
+
+############################ TESTING FUNCTIONS #################################
+
+# testing indexed email function. tracks indices without sending emails out.
+def testEmail_indexed(filePath, startIndex=0, numEmails=50):
+  data = pd.read_csv(filePath)
+  print(f"startIndex: {startIndex}")
+  print(f'numEmails: {numEmails}')
+  for i in range(startIndex, min(len(data), startIndex+numEmails)):
+    print(i, startIndex+numEmails)
+
+# tests os.path and os functions with a filePath
+def testOsPath(filePath):
+  print(os.pardir)
+  print(os.path.abspath(os.path.join(os.getcwd(), os.pardir)))
+  print(os.path.abspath(os.path.join(filePath, os.pardir)))
+  print(os.path.dirname(filePath))
+  print(os.path.basename(filePath))
