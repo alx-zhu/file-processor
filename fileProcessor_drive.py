@@ -215,19 +215,15 @@ def download_GoogleDriveFile(fileId, dirPath):
 
 def downloadFiles_GoogleDriveFolder(folderId, dirPath):
   files = fetchFiles_GoogleDriveFolder(folderId)
-  fileUrls = []
   for file in files:
+    # file fields
     fileId = file.get('id')
-    fileUrls.append(download_GoogleDriveFile(fileId, dirPath))
-  return fileUrls
+    fileName = file.get('name')
 
-# Does not work.
-def downloadCSVFiles_GoogleDriveFolder(folderId, dirPath):
-  files = fetchFiles_GoogleDriveFolder(folderId)
-  fileUrls = []
-  for file in files:
-    fileId = file.get('id')
-    downloadCSV_GoogleDriveFile(fileId, dirPath)
+    # download and write to file.
+    byteFile = download_GoogleDriveFile(fileId, dirPath)
+    f = open(fileName, "wb")
+    f.write(byteFile)
 
 
 ######################### fetchFiles_GoogleDriveFolder #########################
