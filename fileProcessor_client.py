@@ -1,6 +1,7 @@
 # Written by Alexander Zhu
 from webscraperFunc import runWebscraper
-from fileProcessor_lib import processFilesInDir, studyfind_removeDupEmails_inPlace, splitCSVIntoChunks
+from fileProcessor_lib import processFilesInDir, studyfind_removeDupEmails_inPlace, splitCSVIntoChunks, sendEmails_indexed
+from emailerIndexed import studyfind_sendEmails_indexed
 
 
 ### Processes all csv files in the directory named 'dirName'
@@ -8,10 +9,9 @@ from fileProcessor_lib import processFilesInDir, studyfind_removeDupEmails_inPla
   # processingFunc: the function used to process the files.
     # function must take 2 parameters: fileName and filePath
     
-processFilesInDir('TEST_data_sheets', runWebscraper, moveNewFiles=True, 
-  newFilesFolderName="to_split", splitFileFolderName="_to_email", splitFiles=True, splitSize=5, 
-  removeDuplicatesFn=studyfind_removeDupEmails_inPlace, uploadToGoogleDrive=False) 
-  # deleteProcessed=True, deleteNewFiles=True
+# processFilesInDir('TEST_data_sheets', runWebscraper, moveNewFiles=True, 
+#   newFilesFolderName="to_split", splitFileFolderName="_to_email", splitFiles=True, splitSize=5, 
+#   removeDuplicatesFn=studyfind_removeDupEmails_inPlace, uploadToGoogleDrive=False) 
 
 # processFilesInDir(dirName, processingFunc, fileType='.csv', createDir=True, 
 #   moveNewFiles=False, splitFiles=False, splitSize=50, deleteProcessed=False, 
@@ -40,3 +40,9 @@ processFilesInDir('TEST_data_sheets', runWebscraper, moveNewFiles=True,
       # information in print statements explain any issues/actions taken
   # uploadToGoogleDrive: default False. sets whether final files will be uploaded to Google Drive.
   # emails: default None. If files should be shared with specific people, emails=[list/tuple of emails to share with
+
+
+sendEmails_indexed(r'C:\Users\alexa\ProgrammingProjects\studyfind\file-processor\data_sheets\_to_email\MentalHealth-Data\5_MentalHealth-Data.csv', studyfind_sendEmails_indexed, numEmails=50, delay=70)
+
+
+

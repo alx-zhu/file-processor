@@ -4,13 +4,15 @@ import os
 import time
 import pandas as pd
 
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
-from google.oauth2.credentials import Credentials
-
+from fileProcessor_drive import *
 from emailerFunc import studyfind_sendEmails
 from emailerIndexed import studyfind_sendEmails_indexed
+
+
+# Plan: 
+# New Functions:
+# Get Google Drive Directory (dirName)
+# 
 
 ############################ ProcessFilesInDir #################################
 
@@ -27,6 +29,11 @@ def processFilesInDir(dirName, processingFn, fileType='.csv', createDir=True,
     return
   else:
     togglePrint and print("Directory found! \n")
+
+  # Download files from folder 'dirName' in Google Drive into the folder.
+  # Find Google Drive Folder
+  # Download contents into dirName folder.
+
 
   # If the folder is empty, give a warning
   folderContents = os.listdir(dirPath)
@@ -84,10 +91,10 @@ def processFilesInDir(dirName, processingFn, fileType='.csv', createDir=True,
             pass
         # If files are not to be split, but they should be uploaded to Google Drive
         elif (uploadToGoogleDrive):
-          fileId = storeFileInGoogleDrive(fileName, filePath, togglePrint=togglePrint)
+          fileId = storeFile_GoogleDrive(fileName, filePath, togglePrint=togglePrint)
           # share with emails if there are emails provided
           if (emails):
-            shareGoogleDriveFile(fileId, *emails, togglePrint=togglePrint)
+            share_GoogleDriveFile(fileId, *emails, togglePrint=togglePrint)
 
         # If deleteNewFiles is enabled, delete the new file via 'filePath'
         if (deleteNewFiles and os.path.isfile(filePath)):
@@ -240,9 +247,9 @@ def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files
   # creates a google folder for the files if uploadToGoogleDrive=True
   googleFolderId = None
   if (uploadToGoogleDrive):
-    googleFolderId = createGoogleDriveFolder(childFolderName, togglePrint=togglePrint)
+    googleFolderId = create_GoogleDriveFolder(childFolderName, togglePrint=togglePrint)
     if (emails):
-      shareGoogleDriveFile(googleFolderId, *emails, togglePrint=togglePrint)
+      share_GoogleDriveFile(googleFolderId, *emails, togglePrint=togglePrint)
 
   # splits the files
   data = pd.read_csv(filePath)
@@ -258,7 +265,7 @@ def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files
 
     # adds file to the google folder created previously
     if (uploadToGoogleDrive):
-      googleFileId = storeFileInGoogleFolder(splitFileName, splitFilePath, googleFolderId, togglePrint=togglePrint)
+      googleFileId = storeFile_GoogleFolder(splitFileName, splitFilePath, googleFolderId, togglePrint=togglePrint)
 
   togglePrint and print(f"{splits} split file(s) added to the '{childFolderName}' folder.")
 
@@ -330,120 +337,6 @@ def studyfind_removeDupEmails_inPlace(filePath):
   file.close()
 
 
-
-########################### createGoogleDriveFolder ############################
-
-def createGoogleDriveFolder(folderName, togglePrint=True):
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-
-  try:
-    # create drive api client
-    service = build('drive', 'v3', credentials=creds)
-    file_metadata = {
-      'name': folderName,
-      'mimeType': 'application/vnd.google-apps.folder'
-    }
-
-    # pylint: disable=maybe-no-member
-    file = service.files().create(body=file_metadata, fields='id'
-                                    ).execute()
-    togglePrint and print(F'----> Google Drive folder has been created with ID: "{file.get("id")}".')
-
-  except HttpError as error:
-    print(F'***An error occurred: {error}***')
-    file = None
-
-  return file.get('id')
-
-
-
-########################### storeFileInGoogleDrive #############################
-
-def storeFileInGoogleDrive(fileName, filePath, mimeType='text/csv', togglePrint=True):
-  # confirming credentials
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-  
-  try:
-    # create drive api client
-    service = build('drive', 'v3', credentials=creds)
-
-    file_metadata = {'name': fileName}
-    media = MediaFileUpload(filePath, mimetype=mimeType)
-    # pylint: disable=maybe-no-member
-    file = service.files().create(body=file_metadata, media_body=media,
-                                  fields='id').execute()
-    togglePrint and print(F'----> File ID: {file.get("id")} was uploaded to Google Drive.')
-
-  except HttpError as error:
-    print(F'***An error occurred: {error}***')
-    file = None
-
-  return file.get('id')
-
-
-
-########################### storeFileInGoogleDrive #############################
-
-def storeFileInGoogleFolder(fileName, filePath, googleFolderId, mimeType='text/csv', togglePrint=True):
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-
-  try:
-    # create drive api client
-    service = build('drive', 'v3', credentials=creds)
-
-    folder_id = googleFolderId
-    file_metadata = {
-      'name': fileName,
-        'parents': [folder_id]
-    }
-    media = MediaFileUpload(filePath,
-                            mimetype=mimeType, resumable=True)
-    # pylint: disable=maybe-no-member
-    file = service.files().create(body=file_metadata, media_body=media,
-                                  fields='id').execute()
-    togglePrint and print(F'----> File with ID: "{file.get("id")}" has been added to the Google Drive folder with '
-          F'ID "{googleFolderId}".')
-
-  except HttpError as error:
-    print(F'***An error occurred: {error}***')
-    file = None
-
-  return file.get('id')
-
-
-
-########################### storeFileInGoogleDrive #############################
-
-def shareGoogleDriveFile(fileId, *emails, togglePrint=True):
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-
-  try:
-    # create drive api client
-    service = build('drive', 'v3', credentials=creds)
-
-    # share with all emails listed
-    for email in emails:
-      service.permissions().create(body={"role": "writer", "type": "user", 
-            "emailAddress": email}, fileId=fileId).execute()
-      togglePrint and print(F'----> File with ID: "{fileId}" was shared with {email}')
-
-  except HttpError as error:
-    print(F'***An error occurred: {error}***')
-
-
-
 ################################ sendEmails ####################################
 
 # sends in batches of max size 50
@@ -473,7 +366,11 @@ def sendEmails_indexed(filePath, indexedEmailsFn, dirPath=None, fileType='.csv',
     os.mkdir(folderPath)
   
   if (fileType == '.csv'):
-    fileLen = len(pd.read_csv(filePath))
+    if (endIndex == -1):
+      fileLen = len(pd.read_csv(filePath))
+    else:
+      fileLen = min(endIndex, len(pd.read_csv(filePath)))
+    
     emailIndex = startIndex
     while (emailIndex < fileLen):
       emailsToSend = min(numEmails, fileLen-emailIndex)
@@ -510,3 +407,9 @@ def testOsPath(filePath):
   print(os.path.abspath(os.path.join(filePath, os.pardir)))
   print(os.path.dirname(filePath))
   print(os.path.basename(filePath))
+
+### to-do 
+# remove fileName, change to os.path.basename()
+### email functions: 
+# add message option
+# subject line option
