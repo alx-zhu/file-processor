@@ -9,12 +9,17 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.http import MediaIoBaseDownload
 
+# creds = None
+# SCOPES = ['https://www.googleapis.com/auth/drive']
+# if os.path.exists('token.json'):
+#   creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+
 ############################# getGoogleDriveCreds ##############################
 
-def getGoogleDriveCreds():
+def google_get_creds():
   # From the Google Drive API
-  creds = None
   SCOPES = ['https://www.googleapis.com/auth/drive']
+  creds = None
   # The file token.json stores the user's access and refresh tokens, and is
   # created automatically when the authorization flow completes for the first
   # time.
@@ -22,43 +27,35 @@ def getGoogleDriveCreds():
     creds = Credentials.from_authorized_user_file('token.json', SCOPES)
   # If there are no (valid) credentials available, let the user log in.
   if not creds or not creds.valid:
-    if creds and creds.expired and creds.refresh_token:
-      creds.refresh(Request())
-    else:
-      flow = InstalledAppFlow.from_client_secrets_file(
-          'credentials.json', SCOPES)
-      creds = flow.run_local_server(port=0)
-      # Save the credentials for the next run
+    if (os.path.exists('token.json')):
+      os.remove('token.json')
+    flow = InstalledAppFlow.from_client_secrets_file(
+        'credentials.json', SCOPES)
+    creds = flow.run_local_server(port=0)
+    # Save the credentials for the next run
     with open('token.json', 'w') as token:
       token.write(creds.to_json())
-
+  return creds
 
 
 ########################### fetch_GoogleDriveFolder ############################
 
-def fetch_GoogleDriveFolder(folderName, emails=None):
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+def google_fetch_folder(creds, folderName):
 
   try:
     # create drive api client
     service = build('drive', 'v3', credentials=creds)
     response = service.files().list(q=f"mimeType='application/vnd.google-apps.folder' and name = '{folderName}'",
-                                      # spaces='drive',
+                                      spaces='drive',
                                       fields='files(id, name)').execute()
     files = response.get('files', [])
 
     if (len(files) == 0):
-      print(f'{folderName} was not found in Google Drive.')
-      folderId = create_GoogleDriveFolder(folderName)
-      share_GoogleDriveFile(folderId, *emails)
-      print(f'{folderName} created in Google Drive.')
-      return folderId
+      print(f"'{folderName}' was not found in Google Drive.")
+      return 0
     elif (len(files) > 1):
-      print(f'More than one folder of name {folderName} were found in Google Drive. Make sure the folder name is unique.')
-      return None
+      print(f"More than one folder of name '{folderName}' were found in Google Drive. Make sure the folder name is unique.")
+      return 1
 
   except HttpError as error:
     print(F'An error occurred: {error}')
@@ -68,13 +65,9 @@ def fetch_GoogleDriveFolder(folderName, emails=None):
 
 
 
-########################### create_GoogleDriveFolder ############################
+############################# google_create_folder #############################
 
-def create_GoogleDriveFolder(folderName, togglePrint=True):
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+def google_create_folder(creds, folderName, togglePrint=True):
 
   try:
     # create drive api client
@@ -97,15 +90,10 @@ def create_GoogleDriveFolder(folderName, togglePrint=True):
 
 
 
-########################### storeFile_GoogleDrive ##############################
+############################ google_upload_file ################################
 
-def storeFile_GoogleDrive(fileName, filePath, mimeType='text/csv', togglePrint=True):
-  # confirming credentials
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-  
+def google_upload_file(creds, filePath, mimeType='text/csv', togglePrint=True):
+  fileName = os.path.basename(filePath)
   try:
     # create drive api client
     service = build('drive', 'v3', credentials=creds)
@@ -127,12 +115,8 @@ def storeFile_GoogleDrive(fileName, filePath, mimeType='text/csv', togglePrint=T
 
 ############################ storeFile_GoogleFolder ############################
 
-def storeFile_GoogleFolder(fileName, filePath, googleFolderId, mimeType='text/csv', togglePrint=True):
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-
+def google_upload_into_folder(creds, filePath, googleFolderId, mimeType='text/csv', togglePrint=True):
+  fileName = os.path.basename(filePath)
   try:
     # create drive api client
     service = build('drive', 'v3', credentials=creds)
@@ -160,11 +144,7 @@ def storeFile_GoogleFolder(fileName, filePath, googleFolderId, mimeType='text/cs
 
 ############################ share_GoogleDriveFile #############################
 
-def share_GoogleDriveFile(fileId, *emails, togglePrint=True):
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+def google_share_file(creds, fileId, *emails, togglePrint=True):
 
   try:
     # create drive api client
@@ -184,11 +164,7 @@ def share_GoogleDriveFile(fileId, *emails, togglePrint=True):
 
 ########################## download_GoogleDriveFile ############################
 
-def download_GoogleDriveFile(fileId, dirPath):
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+def google_download_file(creds, fileId, fileName, localFolderPath):
   try:
     # create drive api client
     service = build('drive', 'v3', credentials=creds)
@@ -211,28 +187,9 @@ def download_GoogleDriveFile(fileId, dirPath):
 
 
 
-####################### downloadFiles_GoogleDriveFolder ########################
+######################### google_get_files_from_folder #########################
 
-def downloadFiles_GoogleDriveFolder(folderId, dirPath):
-  files = fetchFiles_GoogleDriveFolder(folderId)
-  for file in files:
-    # file fields
-    fileId = file.get('id')
-    fileName = file.get('name')
-
-    # download and write to file.
-    byteFile = download_GoogleDriveFile(fileId, dirPath)
-    f = open(fileName, "wb")
-    f.write(byteFile)
-
-
-######################### fetchFiles_GoogleDriveFolder #########################
-
-def fetchFiles_GoogleDriveFolder(folderId, mimeType='text/csv'):
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+def google_get_files_from_folder(creds, folderId, mimeType='text/csv'):
   try:
     # create drive api client
     service = build('drive', 'v3', credentials=creds)
@@ -261,35 +218,93 @@ def fetchFiles_GoogleDriveFolder(folderId, mimeType='text/csv'):
 
 
 
+  ######################### google_download_from_folder ##########################
+
+def google_download_from_folder(creds, folderId, localFolderPath):
+  files = google_get_files_from_folder(creds, folderId)
+  filesInfo = dict()
+  for file in files:
+    # file fields
+    fileId = file.get('id')
+    fileName = file.get('name')
+    filesInfo[fileName] = fileId
+    # download and write to file.
+    byteFile = google_download_file(creds, fileId, fileName, localFolderPath)
+    f = open(os.path.join(localFolderPath, fileName), "wb")
+    f.write(byteFile)
+  return filesInfo
+
+
+
+################################ move_to_folder ################################
+
+def google_move_to_folder(creds, fileId, folderId):
+    try:
+        # call drive api client
+        service = build('drive', 'v3', credentials=creds)
+
+        # pylint: disable=maybe-no-member
+        # Retrieve the existing parents to remove
+        file = service.files().get(fileId=fileId, fields='parents').execute()
+        previous_parents = ",".join(file.get('parents'))
+        # Move the file to the new folder
+        file = service.files().update(fileId=fileId, addParents=folderId,
+                                      removeParents=previous_parents,
+                                      fields='id, parents').execute()
+
+    except HttpError as error:
+        print(F'An error occurred: {error}')
+        file = None
+
+    return file.get('parents')
+
+
+
+################################## add_parent ##################################
+
+def google_add_parent(creds, fileId, parentId):
+    try:
+        # call drive api client
+        service = build('drive', 'v3', credentials=creds)
+
+        file = service.files().get(fileId=fileId, fields='parents').execute()
+        file = service.files().update(fileId=fileId, addParents=parentId,
+                                      fields='id, parents').execute()
+
+    except HttpError as error:
+        print(F'An error occurred: {error}')
+        file = None
+
+    return file.get('parents')
+
+
+
 ################################ Test Functions ################################
 
 # Tries to download files from the test folder onto the local directory.
-def test_driveDownlaod_functions():
-  getGoogleDriveCreds()
-  folderId = fetch_GoogleDriveFolder('test')
-  files = fetchFiles_GoogleDriveFolder(folderId)
+def test_driveDownload_functions():
+  creds = google_get_creds()
+  folderId = google_fetch_folder(creds, 'test')
+  # files = google_get_files_from_folder(creds, folderId)
 
   # file names
-  fileNames = []
-  for file in files:
-    print(file.get("name"))
-    fileNames.append(file.get("name"))
+  # fileNames = []
+  # for file in files:
+  #   print(file.get("name"))
+  #   fileNames.append(file.get("name"))
 
   # download byte code to file
-  fileUrls = downloadFiles_GoogleDriveFolder(folderId, os.getcwd())
-  for i, url in enumerate(fileUrls):
-    # wget.download(url)
-    f = open(fileNames[i], "wb")
-    f.write(url)
-    print('Complete')
+  # fileUrls = google_get_files_from_folder(creds, folderId, os.getcwd())
+  google_download_from_folder(creds, folderId, r"C:\Users\alexa\ProgrammingProjects\studyfind\file-processor\test")
+  # for i, url in enumerate(fileUrls):
+  #   # wget.download(url)
+  #   f = open(fileNames[i], "wb")
+  #   f.write(url)
+  #   print('Complete')
 
 
 # finds a folder with name 'test'
-def test_findFolder():
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+def test_findFolder(creds):
   try:
     # create drive api client
     service = build('drive', 'v3', credentials=creds)
@@ -320,7 +335,8 @@ def test_findFolder():
   return files
 
 # testDownloadCSV()
-test_driveDownlaod_functions()
+
+# test_driveDownload_functions()
 # test_findFolder()
 # new issues: tokens may need to be refreshed periodically
 
@@ -331,11 +347,7 @@ test_driveDownlaod_functions()
 ############################## Obselete Functions ##############################
 
 # Does not work.
-def downloadCSV_GoogleDriveFile(fileId, dirPath):
-  creds = None
-  SCOPES = ['https://www.googleapis.com/auth/drive']
-  if os.path.exists('token.json'):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+def downloadCSV_GoogleDriveFile(creds, fileId, dirPath):
   try:
     # create drive api client
     # code for downloading files from https://www.casuallycoding.com/download-docs-from-google-drive-api/

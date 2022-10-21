@@ -14,6 +14,102 @@ from emailerIndexed import studyfind_sendEmails_indexed
 # Get Google Drive Directory (dirName)
 # 
 
+def processFilesInDir(dirName, processingFn, fileType='.csv', createDir=True, 
+  moveNewFiles=False, splitFiles=False, splitSize=50, deleteProcessed=False, 
+  deleteNewFiles=False, removeDuplicatesFn=None, processedFolderName='processed', 
+  splitFileFolderName='split_files', newFilesFolderName='new_files', togglePrint=True, 
+  uploadToGoogleDrive=False, emails=None, skipProcessing=False):
+
+  # Get the path for the directory with dirName
+  basePath = getDirectoryPath(dirName, createDir, togglePrint=togglePrint)
+  if (basePath == None):
+    print("*** No directory found. Ending program. ***")
+    return
+  else:
+    togglePrint and print("Directory found! \n")
+
+  # Download files from folder 'dirName' in Google Drive into the folder.
+  # Find Google Drive Folder
+  # Download contents into dirName folder.
+  baseGoogleId = google_fetch_folder(dirName)
+
+  # If the folder is empty, give a warning
+  folderContents = os.listdir(basePath)
+  if (len(folderContents) == 0):
+    print(f"*** The '{dirName}' folder is empty. Please add '{fileType}' files into this folder for processing. ***")
+    return
+  
+  # To prevent accidentally deleting files. Prompt only accepts 'y' to continue
+  # to prevent accidental key presses from continuing the program.
+  if (deleteProcessed or deleteNewFiles):
+    cont = input(f"*** ATTENTION! Running program with deleteProcessed={deleteProcessed} and deleteNewFiles={deleteNewFiles}. Files will be deleted! ***\nContinue (y/n)? ").lower()
+    if (cont != 'y'):
+      print(f"Program aborted. To change delete preferences, edit the 'deleteProcessed' and 'deleteNewFiles' values when calling the 'processFilesInDir' function.")
+      return
+  
+  # If deleteDuplicatesFn is provided, provide a warning message.
+  if (removeDuplicatesFn):
+    togglePrint and print(f"Duplicates will be removed using the '{removeDuplicatesFn}' function.\n")
+
+  # Loop through all files
+  for fileName in os.listdir(basePath):
+    filePath = os.path.join(basePath, fileName)
+    # only process files
+    if (os.path.isfile(filePath)):
+      if (fileName.endswith(fileType)):
+        # First check if this file has already been processed (or one with the same name as this causes errors)
+        if (checkIfAlreadyProcessed(fileName, basePath, processedFolderName)):
+          print(f"*** A file with name '{fileName}' has already been processed. Please delete the previously processed file, or change the name of the current file to avoid errors. ***")
+          return
+
+        # only process and store files if skipProcessing is False
+        if (skipProcessing):
+          togglePrint and print(f"Processing skipped. skipProcessing is set to True")
+        else:  
+          togglePrint and print(f"Processing {fileName}...")
+          processFile(fileName, filePath, processingFn)
+          storeFile(fileName, filePath, basePath, processedFolderName, createDir=createDir, deleteProcessed=deleteProcessed,
+            togglePrint=togglePrint)
+          # If there are NEW files that are written during processing and moveNewFiles=True, move them.
+          if (moveNewFiles):
+            filePath = moveNewFile(fileName, basePath, newFilesFolderName, createDir=createDir, togglePrint=togglePrint)
+        
+        # If a removeDuplicates function is provided, use it.
+        if (removeDuplicatesFn):
+          removeDuplicatesFn(filePath)
+          togglePrint and print(f"--> Duplicates have been removed.")
+        
+        # If files need to be split, split them (only for .csv files for now)
+        # other options will be added as needed.
+        if (splitFiles):
+          if (fileType == '.csv'):
+            splitCSVFile(fileName, filePath, basePath, splitSize, folderName=splitFileFolderName, togglePrint=togglePrint, 
+                uploadToGoogleDrive=uploadToGoogleDrive, emails=emails)
+          elif (fileType == '.tsv'):
+            pass
+        # If files are not to be split, but they should be uploaded to Google Drive
+        elif (uploadToGoogleDrive):
+          fileId = google_upload_file(fileName, filePath, togglePrint=togglePrint)
+          # share with emails if there are emails provided
+          if (emails):
+            google_share_file(fileId, *emails, togglePrint=togglePrint)
+
+        # If deleteNewFiles is enabled, delete the new file via 'filePath'
+        if (deleteNewFiles and os.path.isfile(filePath)):
+          os.remove(filePath)
+          togglePrint and print(f"'{fileName}' deleted.")
+
+        togglePrint and print(f"Complete!\n")
+
+      # if file is not a .fileType file, does not process it.
+      else:
+        print(f"*** '{fileName}' is not a '{fileType}' file. Skipped this file in processing. ***\n")
+  
+  print("ALL FILES PROCESSED!")
+
+
+
+
 ############################ ProcessFilesInDir #################################
 
 def processFilesInDir(dirName, processingFn, fileType='.csv', createDir=True, 
@@ -91,10 +187,10 @@ def processFilesInDir(dirName, processingFn, fileType='.csv', createDir=True,
             pass
         # If files are not to be split, but they should be uploaded to Google Drive
         elif (uploadToGoogleDrive):
-          fileId = storeFile_GoogleDrive(fileName, filePath, togglePrint=togglePrint)
+          fileId = google_upload_file(fileName, filePath, togglePrint=togglePrint)
           # share with emails if there are emails provided
           if (emails):
-            share_GoogleDriveFile(fileId, *emails, togglePrint=togglePrint)
+            google_share_file(fileId, *emails, togglePrint=togglePrint)
 
         # If deleteNewFiles is enabled, delete the new file via 'filePath'
         if (deleteNewFiles and os.path.isfile(filePath)):
@@ -247,9 +343,9 @@ def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files
   # creates a google folder for the files if uploadToGoogleDrive=True
   googleFolderId = None
   if (uploadToGoogleDrive):
-    googleFolderId = create_GoogleDriveFolder(childFolderName, togglePrint=togglePrint)
+    googleFolderId = google_create_folder(childFolderName, togglePrint=togglePrint)
     if (emails):
-      share_GoogleDriveFile(googleFolderId, *emails, togglePrint=togglePrint)
+      google_share_file(googleFolderId, *emails, togglePrint=togglePrint)
 
   # splits the files
   data = pd.read_csv(filePath)
@@ -265,7 +361,7 @@ def splitCSVFile(fileName, filePath, dirPath, splitSize, folderName="split_files
 
     # adds file to the google folder created previously
     if (uploadToGoogleDrive):
-      googleFileId = storeFile_GoogleFolder(splitFileName, splitFilePath, googleFolderId, togglePrint=togglePrint)
+      googleFileId = google_upload_file(splitFileName, splitFilePath, googleFolderId, togglePrint=togglePrint)
 
   togglePrint and print(f"{splits} split file(s) added to the '{childFolderName}' folder.")
 

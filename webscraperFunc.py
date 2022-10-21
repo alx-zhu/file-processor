@@ -3,10 +3,12 @@ from urllib.request import urlopen as uReq
 from bs4 import BeautifulSoup as soup
 import csv
 import pandas as pd
+import os
 
 
-def runWebscraper(fileName, filePath):
+def runWebscraper(filePath):
   #open and write csv file
+  fileName = os.path.basename(filePath)
   f = open(fileName, "w", encoding="utf-8")
 
   #excel headers
@@ -149,3 +151,4 @@ def runWebscraper(fileName, filePath):
     )
 
   f.close()
+  return fileName
