@@ -45,7 +45,7 @@ def google_fetch_folder(creds, folderName):
   try:
     # create drive api client
     service = build('drive', 'v3', credentials=creds)
-    response = service.files().list(q=f"mimeType='application/vnd.google-apps.folder' and name = '{folderName}'",
+    response = service.files().list(q=f"mimeType='application/vnd.google-apps.folder' and name = '{folderName}' and trashed = False",
                                       spaces='drive',
                                       fields='files(id, name)').execute()
     files = response.get('files', [])
@@ -197,7 +197,7 @@ def google_get_files_from_folder(creds, folderId, mimeType='text/csv'):
     page_token = None
     while True:
       # pylint: disable=maybe-no-member
-      response = service.files().list(q=f"mimeType='{mimeType}' and '{folderId}' in parents",
+      response = service.files().list(q=f"mimeType='{mimeType}' and '{folderId}' in parents and trashed = False",
                                       spaces='drive',
                                       fields='nextPageToken, '
                                               'files(id, name)',
@@ -285,22 +285,8 @@ def google_add_parent(creds, fileId, parentId):
 def test_driveDownload_functions():
   creds = google_get_creds()
   folderId = google_fetch_folder(creds, 'test')
-  # files = google_get_files_from_folder(creds, folderId)
-
-  # file names
-  # fileNames = []
-  # for file in files:
-  #   print(file.get("name"))
-  #   fileNames.append(file.get("name"))
-
-  # download byte code to file
-  # fileUrls = google_get_files_from_folder(creds, folderId, os.getcwd())
   google_download_from_folder(creds, folderId, r"C:\Users\alexa\ProgrammingProjects\studyfind\file-processor\test")
-  # for i, url in enumerate(fileUrls):
-  #   # wget.download(url)
-  #   f = open(fileNames[i], "wb")
-  #   f.write(url)
-  #   print('Complete')
+
 
 
 # finds a folder with name 'test'
@@ -313,7 +299,7 @@ def test_findFolder(creds):
     while True:
       # pylint: disable=maybe-no-member
       # mimeType='application/vnd.google-apps.folder'
-      response = service.files().list(q="name='test' and mimeType='application/vnd.google-apps.folder'",
+      response = service.files().list(q="name='test' and mimeType='application/vnd.google-apps.folder' and trashed = False",
                                       spaces='drive',
                                       fields='nextPageToken, '
                                               'files(id, name)',
@@ -333,12 +319,6 @@ def test_findFolder(creds):
   for file in files:
     print(file.get('name'))
   return files
-
-# testDownloadCSV()
-
-# test_driveDownload_functions()
-# test_findFolder()
-# new issues: tokens may need to be refreshed periodically
 
 
 
@@ -370,3 +350,5 @@ def downloadCSV_GoogleDriveFile(creds, fileId, dirPath):
   except HttpError as error:
     print(F'An error occurred: {error}')
     fh = None
+
+google_get_creds()

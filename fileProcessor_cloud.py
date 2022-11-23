@@ -6,16 +6,18 @@ import pandas as pd
 
 from fileProcessor_drive import *
 from emailerFunc import studyfind_sendEmails
-from emailerIndexed import studyfind_sendEmails_indexed
 from webscraperFunc import runWebscraper
 
 
+# TODO: do not make local folders, just upload processed files to the google drive
+# TODO: make split size 1000
+# TODO: get emailing to download 1 file from google drive, send emails, then move file to 'emailed'.
 
 # look up how to get a refresh token
 
 def processFilesInFolder(baseFolderName, processingFn=None, fileType='.csv',
   splitSizes=[], defaultSplitSize=50, removeDuplicatesFn=None, processedFolderName='processed', 
-  toEmailFolderName='to_email', togglePrint=True, emails=[]):
+  emailFolderName='_to_email', togglePrint=True, emails=[]):
 
   # get creds and refresh if needed.
   creds = google_get_creds()
@@ -37,6 +39,16 @@ def processFilesInFolder(baseFolderName, processingFn=None, fileType='.csv',
     print(f"'{baseFolderName}' created in Google Drive. Please fill this folder with files to be processed.")
     return
   elif (baseFolderId == 1):
+    print(f"Error fetching or creating '{baseFolderName}' on Google Drive.")
+    return
+
+  emailFolderId = google_fetch_folder(creds, emailFolderName)
+  if (emailFolderId == 0):
+    emailFolderId = google_create_folder(creds, emailFolderName)
+    google_share_file(creds, emailFolderId, *emails)
+    print(f"'{emailFolderName}' created in Google Drive. This folder will be used to store files prepared for emailing.")
+  elif (emailFolderId == 1):
+    print(f"Error fetching or creating '{emailFolderName}' on Google Drive.")
     return
 
   # Download contents into baseFolderName folder.
@@ -55,21 +67,28 @@ def processFilesInFolder(baseFolderName, processingFn=None, fileType='.csv',
   
   # Warning
   print("\n***ATTENTION! Processed files will be deleted.***")
-  emailFolderPath = createFolder(baseFolderPath, toEmailFolderName)
+  emailFolderPath = getDirectory(baseFolderPath, emailFolderName)
 
   # Loop through all files
   for fileName in os.listdir(baseFolderPath):
-    filePath = os.path.join(baseFolderPath, fileName)
+    filePath = fixFileName(os.path.join(baseFolderPath, fileName))
     # only process files
     if (os.path.isfile(filePath)):
       if (fileName.endswith(fileType)):
         togglePrint and print(f"Processing {fileName}...")
         newFilePath = processFile(filePath, processingFn)
+
+        # check for errors
+        if (newFilePath == -1):
+          continue
+
         # delete the old file
         if (os.path.isfile(filePath)):
           os.remove(filePath)
+
         # move the new one into the folder
-        filePath = moveFileToFolder(newFilePath, baseFolderPath, togglePrint=togglePrint)
+        # filePath = moveFileToFolder(newFilePath, baseFolderPath, togglePrint=togglePrint)
+        filePath = newFilePath
 
         # If a removeDuplicates function is provided, use it.
         if (removeDuplicatesFn):
@@ -79,7 +98,7 @@ def processFilesInFolder(baseFolderName, processingFn=None, fileType='.csv',
         # If files need to be split, split them (only for .csv files for now)
         # other options will be added as needed.
         if (fileType == '.csv'):
-          splitCSVIntoChunks(creds, filePath, emailFolderPath, splitSizes, defaultSize=defaultSplitSize, togglePrint=togglePrint, emails=emails)
+          splitCSVIntoChunks(creds, filePath, emailFolderPath, emailFolderId, splitSizes, defaultSize=defaultSplitSize, togglePrint=togglePrint, emails=emails)
         else:
           print("Invalid file type.")
           continue
@@ -98,10 +117,77 @@ def processFilesInFolder(baseFolderName, processingFn=None, fileType='.csv',
       else:
         print(f"*** '{fileName}' is not a '{fileType}' file. Skipped this file in processing. ***\n")
     
-    
-  
   print("ALL FILES PROCESSED!")
 
+
+########################### sendEmailsFromFolder ###############################
+  
+def sendEmailsFromFolder(emailFolderName, delay=70, fileType='.csv', processedFolderName="emailed", togglePrint=True, emails=[]):
+  # get creds and refresh if needed.
+  creds = google_get_creds()
+
+  # Get the path for the directory with baseFolderName
+  emailFolderPath = getDirectoryPath(emailFolderName, togglePrint=togglePrint)
+  if (emailFolderPath == None):
+    print("*** No directory found. Ending program. ***")
+    return
+  else:
+    togglePrint and print("Directory found! \n")
+
+  # Download files from folder 'baseFolderName' in Google Drive into the folder.
+  # Find Google Drive Folder
+  emailFolderId = google_fetch_folder(creds, emailFolderName)
+  if (emailFolderId == 0):
+    emailFolderId = google_create_folder(creds, emailFolderName)
+    google_share_file(creds, emailFolderId, *emails)
+    print(f"'{emailFolderName}' created in Google Drive. Please fill this folder with files to be processed.")
+    return
+  elif (emailFolderId == 1):
+    print(f"Error fetching or creating '{emailFolderName}' on Google Drive.")
+    return
+
+  # Download contents into emailFolderName folder.
+  filesInfo = google_download_from_folder(creds, emailFolderId, emailFolderPath)
+  if (len(filesInfo) == 0):
+    print("No files in the google drive folder.")
+  # move the files into the processed folder in Google Drive
+  processedFolderId = google_fetch_folder(creds, processedFolderName)
+  if (processedFolderId == 0):
+    processedFolderId = google_create_folder(creds, processedFolderName)
+    google_add_parent(creds, processedFolderId, emailFolderId)
+    google_share_file(creds, emailFolderId, *emails)
+    print(f"'{processedFolderName}' created in Google Drive.")
+  elif (processedFolderId == 1):
+    return
+  
+  # Warning
+  print("\n***ATTENTION! Processed files will be deleted.***")
+
+  # Loop through all files
+  for fileName in os.listdir(emailFolderPath):
+    filePath = fixFileName(os.path.join(emailFolderPath, fileName))
+    # only process files
+    if (os.path.isfile(filePath)):
+      if (fileName.endswith(fileType)):
+        togglePrint and print(f"Emailing from {fileName}...")
+        studyfind_sendEmails(filePath)
+        time.sleep(delay)
+
+        # delete the file that was used to create split files
+        if (os.path.isfile(filePath)):
+          os.remove(filePath)
+        
+        # after emailing is done, move the file into the processed folder.
+        google_add_parent(creds, filesInfo[fileName], processedFolderId)
+        print(f"{fileName} moved to '{processedFolderName} folder in Google Drive")
+
+        togglePrint and print(f"Complete!\n")
+
+      # if file is not a .fileType file, does not process it.
+      else:
+        print(f"*** '{fileName}' is not a '{fileType}' file. Skipped this file in processing. ***\n")
+    
+  print("ALL EMAILS SENT!")
 
 
 ############################ getDirectoryPath ##################################
@@ -118,9 +204,9 @@ def getDirectoryPath(baseFolderName, togglePrint=True):
 
 
 
-############################## createFolder ####################################
+############################## getDirectory ####################################
 
-def createFolder(path, folderName):
+def getDirectory(path, folderName):
   folderPath = os.path.join(path, folderName)
   if (not os.path.exists(folderPath)):
     os.mkdir(folderPath)
@@ -166,18 +252,15 @@ def moveFileToFolder(filePath, folderPath, togglePrint=True):
 # will split file into all defined chunkSizes if possible
 # any remaining rows in the file will be split according to defaultSize
 # if defaultSize=None, any remaining rows will be added into a single file.
-def splitCSVIntoChunks(creds, filePath, parentFolderPath, chunkSizes, defaultSize=None, togglePrint=True, emails=[]):
+def splitCSVIntoChunks(creds, filePath, parentFolderPath, parentFolderId, chunkSizes, defaultSize=None, togglePrint=True, emails=[]):
   # creates a folder with the same name as the file to hold the split files.
   fileName = os.path.basename(filePath)
   childFolderName = str(fileName.split('.')[0])
-  childFolderPath = os.path.join(parentFolderPath, childFolderName)
-  if (not os.path.exists(childFolderPath)):
-    os.mkdir(childFolderPath)
-    togglePrint and print(f"--> Created the '{childFolderName}' folder to store the split files.")
+  childFolderPath = getDirectory(parentFolderPath, childFolderName)
   
   # creates a google folder for the files
-  googleFolderId = google_create_folder(creds, childFolderName, togglePrint=togglePrint)
-  google_share_file(creds, googleFolderId, *emails, togglePrint=togglePrint)
+  # googleFolderId = google_create_folder(creds, childFolderName, togglePrint=togglePrint)
+  # google_share_file(creds, googleFolderId, *emails, togglePrint=togglePrint)
 
   data = pd.read_csv(filePath)
   data = data.rename(columns={' Contact Name':'Name', ' Contact Email':'Email'})
@@ -197,7 +280,7 @@ def splitCSVIntoChunks(creds, filePath, parentFolderPath, chunkSizes, defaultSiz
     fileIndex += 1
 
     togglePrint and print(f"Created split file of size {chunk} named '{splitFileName}'")
-    googleFileId = google_upload_into_folder(creds, splitFilePath, googleFolderId, togglePrint=togglePrint)
+    googleFileId = google_upload_into_folder(creds, splitFilePath, parentFolderId, togglePrint=togglePrint)
   
   # if there is still data left after the chunks are made
   if (dataIndex < len(data)):
@@ -214,7 +297,7 @@ def splitCSVIntoChunks(creds, filePath, parentFolderPath, chunkSizes, defaultSiz
         fileIndex += 1
 
         togglePrint and print(f"No chunk sizes remaining. Created split file of default size {defaultSize} named: '{splitFileName}'")
-        googleFileId = google_upload_into_folder(creds, splitFilePath, googleFolderId, togglePrint=togglePrint)
+        googleFileId = google_upload_into_folder(creds, splitFilePath, parentFolderId, togglePrint=togglePrint)
 
     # if there is no default size, put all the remaining data into one file
     else:
@@ -223,7 +306,7 @@ def splitCSVIntoChunks(creds, filePath, parentFolderPath, chunkSizes, defaultSiz
       splitFilePath = os.path.join(childFolderPath, splitFileName) 
       df.to_csv(splitFilePath, index=False)
       togglePrint and print(f"No chunk sizes remaining. No defaultSize provided, so all remaining data is stored in: '{splitFileName}'")
-      google_upload_into_folder(creds, splitFilePath, googleFolderId, togglePrint=togglePrint)
+      google_upload_into_folder(creds, splitFilePath, parentFolderId, togglePrint=togglePrint)
 
 
 
@@ -238,48 +321,28 @@ def studyfind_removeDupEmails_inPlace(filePath):
   file.close()
 
 
-################################ sendEmails ####################################
+################################ fixFileName ###################################
 
-# to add: function that sends emails without using split files.
-# by default, will use the current directory as the path to create folders
-# indexedEmailsFn MUST take: filePath, startIndex, numberOfEmails
-def sendEmails_indexed(filePath, indexedEmailsFn, baseFolderPath=None, fileType='.csv', 
-        sentFolderName='sent', startIndex=0, endIndex=-1, numEmails=50, delay=30, togglePrint=True):
+def fixFileName(filePath):
+  newName = os.path.basename(filePath).replace(" ", "_")
+  newParent = os.path.dirname(filePath)
+  newPath = os.path.join(newParent, newName)
+  os.rename(filePath, newPath)
+  return newPath
 
-  # if baseFolderPath is none, use the parent directory of the current file
-  if (not baseFolderPath):
-    baseFolderPath = os.path.baseFolderName(filePath)
 
-  folderPath = os.path.join(baseFolderPath, sentFolderName)
-  if (not os.path.exists(folderPath)):
-    os.mkdir(folderPath)
-  
-  if (fileType == '.csv'):
-    if (endIndex == -1):
-      fileLen = len(pd.read_csv(filePath))
-    else:
-      fileLen = min(endIndex, len(pd.read_csv(filePath)))
-    
-    emailIndex = startIndex
-    while (emailIndex < fileLen):
-      emailsToSend = min(numEmails, fileLen-emailIndex)
+################################ clearFolder ###################################
 
-      # send email
-      indexedEmailsFn(filePath, startIndex=emailIndex, numEmails=emailsToSend)
-      togglePrint and print(f"--> ({min(emailsToSend, fileLen)}) total emails have been sent.")
-      
-      # delay between sends
-      time.sleep(delay)
-      # update index
-      emailIndex += numEmails
-  
-  # move file
-  fileName = os.path.baseFoldername(filePath)
-  os.rename(filePath, os.path.join(folderPath, fileName))
-  togglePrint and print(f"All '{fileName}' emails have been sent. File moved to the '{sentFolderName}' folder.")
+def clearFolder(folderPath):
+  for fileName in os.listdir(folderPath):
+    filePath = os.path.join(folderPath, fileName)
+    if (os.path.isfile(filePath)):
+      os.remove(filePath)
 
 
 ############################ TESTING FUNCTIONS #################################
 
 
-processFilesInFolder('test', processingFn=runWebscraper)
+# processFilesInFolder('test', processingFn=runWebscraper)
+
+sendEmailsFromFolder("to_email", delay=10)
