@@ -2,6 +2,7 @@
 from webscraperFunc import runWebscraper
 from fileProcessor_lib import processFilesInDir, studyfind_removeDupEmails_inPlace, splitCSVIntoChunks, sendEmails_indexed
 from emailerIndexed import studyfind_sendEmails_indexed
+from fileProcessor_cloud import *
 
 
 ### Processes all csv files in the directory named 'dirName'
@@ -42,7 +43,7 @@ from emailerIndexed import studyfind_sendEmails_indexed
   # emails: default None. If files should be shared with specific people, emails=[list/tuple of emails to share with
 
 
-sendEmails_indexed(r'C:\Users\alexa\ProgrammingProjects\studyfind\file-processor\data_sheets\_to_email\MentalHealth-Data\5_MentalHealth-Data.csv', studyfind_sendEmails_indexed, numEmails=50, delay=70)
+# sendEmails_indexed(r'C:\Users\alexa\ProgrammingProjects\studyfind\file-processor\data_sheets\_to_email\MentalHealth-Data\5_MentalHealth-Data.csv', studyfind_sendEmails_indexed, numEmails=50, delay=70)
 
 
 

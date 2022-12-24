@@ -55,7 +55,7 @@ def google_fetch_folder(creds, folderName):
       return 0
     elif (len(files) > 1):
       print(f"More than one folder of name '{folderName}' were found in Google Drive. Make sure the folder name is unique.")
-      return 1
+      return -1
 
   except HttpError as error:
     print(F'An error occurred: {error}')

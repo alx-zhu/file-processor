@@ -7,39 +7,46 @@ import pandas as pd
 from fileProcessor_drive import *
 from emailerFunc import studyfind_sendEmails
 from webscraperFunc import runWebscraper
+from fileProcessor_globals import *
 
+
+# GLOBAL FOLDER NAMES
 
 # TODO: do not make local folders, just upload processed files to the google drive
-# TODO: make split size 1000
 # TODO: get emailing to download 1 file from google drive, send emails, then move file to 'emailed'.
+# NOTE: changes for cloud: all files are downloaded from google drive, and are assumed not to be stored on local
+# NOTE: file for emailing are reuploaded onto google drive, and downloaded at a later time for emailing.
 
 # look up how to get a refresh token
 
-def processFilesInFolder(baseFolderName, processingFn=None, fileType='.csv',
-  splitSizes=[], defaultSplitSize=50, removeDuplicatesFn=None, processedFolderName='processed', 
-  emailFolderName='_to_email', togglePrint=True, emails=[]):
+def processFilesInFolder(processingFn=None, fileType='.csv',
+  splitSizes=[], defaultSplitSize=1000, removeDuplicatesFn=None, processedFolderName='processed', 
+  emailFolderName=EMAIL_FOLDER_NAME, togglePrint=True, emails=[]):
 
   # get creds and refresh if needed.
   creds = google_get_creds()
 
   # Get the path for the directory with baseFolderName
-  baseFolderPath = getDirectoryPath(baseFolderName, togglePrint=togglePrint)
+  baseFolderPath = getDirectoryPath(BASE_FOLDER_NAME, togglePrint=togglePrint)
   if (baseFolderPath == None):
     print("*** No directory found. Ending program. ***")
     return
   else:
-    togglePrint and print("Directory found! \n")
+    togglePrint and print(f"Directory found with name '{BASE_FOLDER_NAME}' \n")
 
-  # Download files from folder 'baseFolderName' in Google Drive into the folder.
+  # Clear the folder of all old files.
+  clearFolder(baseFolderPath)
+
+  # Download files from folder 'BASE_FOLDER_NAME' in Google Drive into the folder.
   # Find Google Drive Folder
-  baseFolderId = google_fetch_folder(creds, baseFolderName)
+  baseFolderId = google_fetch_folder(creds, BASE_FOLDER_NAME)
   if (baseFolderId == 0):
-    baseFolderId = google_create_folder(creds, baseFolderName)
+    baseFolderId = google_create_folder(creds, BASE_FOLDER_NAME)
     google_share_file(creds, baseFolderId, *emails)
-    print(f"'{baseFolderName}' created in Google Drive. Please fill this folder with files to be processed.")
+    print(f"'{BASE_FOLDER_NAME}' created in Google Drive. Please fill this folder with files to be processed.")
     return
-  elif (baseFolderId == 1):
-    print(f"Error fetching or creating '{baseFolderName}' on Google Drive.")
+  elif (baseFolderId == -1):
+    print(f"Error fetching or creating '{BASE_FOLDER_NAME}' on Google Drive.")
     return
 
   emailFolderId = google_fetch_folder(creds, emailFolderName)
@@ -47,7 +54,7 @@ def processFilesInFolder(baseFolderName, processingFn=None, fileType='.csv',
     emailFolderId = google_create_folder(creds, emailFolderName)
     google_share_file(creds, emailFolderId, *emails)
     print(f"'{emailFolderName}' created in Google Drive. This folder will be used to store files prepared for emailing.")
-  elif (emailFolderId == 1):
+  elif (emailFolderId == -1):
     print(f"Error fetching or creating '{emailFolderName}' on Google Drive.")
     return
 
@@ -62,7 +69,7 @@ def processFilesInFolder(baseFolderName, processingFn=None, fileType='.csv',
     google_add_parent(creds, processedFolderId, baseFolderId)
     google_share_file(creds, baseFolderId, *emails)
     print(f"'{processedFolderName}' created in Google Drive.")
-  elif (processedFolderId == 1):
+  elif (processedFolderId == -1):
     return
   
   # Warning
@@ -87,7 +94,6 @@ def processFilesInFolder(baseFolderName, processingFn=None, fileType='.csv',
           os.remove(filePath)
 
         # move the new one into the folder
-        # filePath = moveFileToFolder(newFilePath, baseFolderPath, togglePrint=togglePrint)
         filePath = newFilePath
 
         # If a removeDuplicates function is provided, use it.
@@ -122,7 +128,7 @@ def processFilesInFolder(baseFolderName, processingFn=None, fileType='.csv',
 
 ########################### sendEmailsFromFolder ###############################
   
-def sendEmailsFromFolder(emailFolderName, delay=70, fileType='.csv', processedFolderName="emailed", togglePrint=True, emails=[]):
+def sendEmailsFromFolder(emailFolderName=EMAIL_FOLDER_NAME, delay=70, fileType='.csv', processedFolderName="emailed", togglePrint=True, emails=[]):
   # get creds and refresh if needed.
   creds = google_get_creds()
 
@@ -142,7 +148,7 @@ def sendEmailsFromFolder(emailFolderName, delay=70, fileType='.csv', processedFo
     google_share_file(creds, emailFolderId, *emails)
     print(f"'{emailFolderName}' created in Google Drive. Please fill this folder with files to be processed.")
     return
-  elif (emailFolderId == 1):
+  elif (emailFolderId == -1):
     print(f"Error fetching or creating '{emailFolderName}' on Google Drive.")
     return
 
@@ -157,7 +163,7 @@ def sendEmailsFromFolder(emailFolderName, delay=70, fileType='.csv', processedFo
     google_add_parent(creds, processedFolderId, emailFolderId)
     google_share_file(creds, emailFolderId, *emails)
     print(f"'{processedFolderName}' created in Google Drive.")
-  elif (processedFolderId == 1):
+  elif (processedFolderId == -1):
     return
   
   # Warning
@@ -193,13 +199,12 @@ def sendEmailsFromFolder(emailFolderName, delay=70, fileType='.csv', processedFo
 ############################ getDirectoryPath ##################################
 
 # Gets the path to the directory containing all csv files, makes a new 
-# directory with 'baseFolderName' if none is found. Disable folder creation by setting
-# createDir to False.
+# directory with 'baseFolderName' if none is found.
+
 def getDirectoryPath(baseFolderName, togglePrint=True):
   baseFolderPath = os.path.join(os.getcwd(), baseFolderName)
   if (not os.path.exists(baseFolderPath)):
     os.mkdir(baseFolderPath)
-    # print(f"*** Created a '{baseFolderName}' folder. Please add files into this folder for processing. ***")
   return baseFolderPath
 
 
@@ -210,7 +215,6 @@ def getDirectory(path, folderName):
   folderPath = os.path.join(path, folderName)
   if (not os.path.exists(folderPath)):
     os.mkdir(folderPath)
-    # print(f"*** Created a '{baseFolderName}' folder. Please add files into this folder for processing. ***")
   return folderPath
 
 
@@ -255,8 +259,9 @@ def moveFileToFolder(filePath, folderPath, togglePrint=True):
 def splitCSVIntoChunks(creds, filePath, parentFolderPath, parentFolderId, chunkSizes, defaultSize=None, togglePrint=True, emails=[]):
   # creates a folder with the same name as the file to hold the split files.
   fileName = os.path.basename(filePath)
-  childFolderName = str(fileName.split('.')[0])
-  childFolderPath = getDirectory(parentFolderPath, childFolderName)
+  # childFolderName = str(fileName.split('.')[0])
+  # childFolderPath = getDirectory(parentFolderPath, childFolderName)
+  childFolderPath = parentFolderPath
   
   # creates a google folder for the files
   # googleFolderId = google_create_folder(creds, childFolderName, togglePrint=togglePrint)
@@ -343,6 +348,3 @@ def clearFolder(folderPath):
 ############################ TESTING FUNCTIONS #################################
 
 
-# processFilesInFolder('test', processingFn=runWebscraper)
-
-sendEmailsFromFolder("to_email", delay=10)
