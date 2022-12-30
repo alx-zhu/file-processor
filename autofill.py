@@ -5,10 +5,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
 import os
 import time
+from fileProcessor_drive import *
+from fileProcessor_globals import *
 
 # To do: Get search terms standardized for each group
 
-def download_file(keywords="", other_keys="", country="United States", directory_name="to_upload", default_filename="SearchResults.csv"):
+def download_file(keywords="", other_keys="", country="United States", directory_name="to_upload", default_filename="SearchResults.csv", upload_to_drive=False):
   # Create the folder to store downloads if it does not exist
   download_path = os.path.join(os.getcwd(), directory_name)
   if (not os.path.exists(download_path)):
@@ -78,5 +80,16 @@ def download_file(keywords="", other_keys="", country="United States", directory
 
   browser.quit()
 
+  # Upload the retrieved file to the Google Drive folder.
+  if (upload_to_drive):
+    creds = google_get_creds()
+    upload_folder_id = google_fetch_folder(creds, BASE_FOLDER_NAME)
+    if (upload_folder_id == 0):
+      upload_folder_id = google_create_folder(creds, BASE_FOLDER_NAME)
+    
+    google_upload_into_folder(creds, new_file_path, upload_folder_id)
 
-download_file(country="Mexico")
+
+
+
+download_file(country="Spain", upload_to_drive=True)
