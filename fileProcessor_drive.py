@@ -1,6 +1,6 @@
 import os
 import io
-import wget
+import google.auth
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
@@ -41,7 +41,6 @@ def google_get_creds():
 ########################### fetch_GoogleDriveFolder ############################
 
 def google_fetch_folder(creds, folderName):
-
   try:
     # create drive api client
     service = build('drive', 'v3', credentials=creds)
@@ -68,7 +67,6 @@ def google_fetch_folder(creds, folderName):
 ############################# google_create_folder #############################
 
 def google_create_folder(creds, folderName, togglePrint=True):
-
   try:
     # create drive api client
     service = build('drive', 'v3', credentials=creds)
@@ -145,7 +143,6 @@ def google_upload_into_folder(creds, filePath, googleFolderId, mimeType='text/cs
 ############################ share_GoogleDriveFile #############################
 
 def google_share_file(creds, fileId, *emails, togglePrint=True):
-
   try:
     # create drive api client
     service = build('drive', 'v3', credentials=creds)
@@ -218,10 +215,60 @@ def google_get_files_from_folder(creds, folderId, mimeType='text/csv'):
 
 
 
-  ######################### google_download_from_folder ##########################
+######################### google_get_n_files_from_folder #########################
+
+# Fetches a maximum of n files from a folder.
+def google_get_n_files_from_folder(creds, folderId, numFiles, mimeType='text/csv'):
+  try:
+    # create drive api client
+    service = build('drive', 'v3', credentials=creds)
+    files = []
+    page_token = None
+    while True:
+      # pylint: disable=maybe-no-member
+      response = service.files().list(q=f"mimeType='{mimeType}' and '{folderId}' in parents and trashed = False",
+                                      spaces='drive',
+                                      fields='nextPageToken, '
+                                              'files(id, name)',
+                                      pageToken=page_token).execute()
+      for file in response.get('files', []):
+        # Process change
+        print(F'Found file: {file.get("name")}, {file.get("id")}')
+      files.extend(response.get('files', []))
+      page_token = response.get('nextPageToken', None)
+      if page_token is None or len(files) >= numFiles:
+        break
+
+  except HttpError as error:
+    print(F'An error occurred: {error}')
+    files = None
+
+  return files[:numFiles]
+
+
+
+######################### google_download_from_folder ##########################
 
 def google_download_from_folder(creds, folderId, localFolderPath):
   files = google_get_files_from_folder(creds, folderId)
+  filesInfo = dict()
+  for file in files:
+    # file fields
+    fileId = file.get('id')
+    fileName = file.get('name')
+    filesInfo[fileName] = fileId
+    # download and write to file.
+    byteFile = google_download_file(creds, fileId, fileName, localFolderPath)
+    f = open(os.path.join(localFolderPath, fileName), "wb")
+    f.write(byteFile)
+  return filesInfo
+
+
+
+######################### google_download_from_folder ##########################
+
+def google_download_n_from_folder(creds, folderId, localFolderPath, numFiles):
+  files = google_get_n_files_from_folder(creds, folderId, numFiles)
   filesInfo = dict()
   for file in files:
     # file fields
@@ -350,5 +397,3 @@ def downloadCSV_GoogleDriveFile(creds, fileId, dirPath):
   except HttpError as error:
     print(F'An error occurred: {error}')
     fh = None
-
-google_get_creds()
