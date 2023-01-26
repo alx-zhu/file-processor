@@ -22,7 +22,7 @@ def studyfind_fix_columns(filePath):
     if (not 'Name' in data.columns):
         data = data.rename(columns={' Contact Name':'Name'})
         
-def studyfind_sendEmails(filePath, num_emails=50, from_email="anika.shah03@studyfind.org", app_password="vdfbtcpvtklsujjn", subject_lines=[], email_body=""):
+def studyfind_sendEmails(filePath, num_emails=50, from_email="", app_password="", subject_lines=[], email_body=""):
     studyfind_removeDupEmails_inPlace(filePath)
     # read data from csv file
     data = pd.read_csv(filePath)
